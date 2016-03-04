@@ -35,7 +35,7 @@ Class Options
     End Function
 End Class
 Module SendGmail
-    Dim Scopes As String() = {GmailService.Scope.GmailSend}
+    Dim Scopes As String() = {GmailService.Scope.GmailCompose}
     Sub Main(args As String())
         Dim o As New Options()
         If CommandLine.Parser.Default.ParseArguments(args, o) Then
@@ -87,14 +87,18 @@ Module SendGmail
                 Dim AlarmTriggered As Boolean = False
 
                 Try
-                    Dim msgStr = New Stream
+                    For Each f In Directory.GetFiles(".", "*.eml", SearchOption.TopDirectoryOnly)
+                        File.Delete(f)
+                    Next
+                    Dim msgStr
                     Dim client As SmtpClient = New SmtpClient("localhost")
                     client.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory
-                    client.PickupDirectoryLocation = "."
+                    client.PickupDirectoryLocation = Directory.GetCurrentDirectory()
                     client.Send(msg)
                     Dim filepath = Directory.GetFiles(".", "*.eml", SearchOption.TopDirectoryOnly).Single()
                     Using fs As New FileStream(filepath, FileMode.Open)
-                        fs.CopyTo(msgstr)
+                        Dim reader As New StreamReader(fs)
+                        msgStr = reader.ReadToEnd()
                     End Using
                     Dim result = gmail.Users.Messages.Send(New Message With {.Raw = Base64UrlEncode(msgStr.ToString())}, "me").Execute()
                 Catch e As Exception
