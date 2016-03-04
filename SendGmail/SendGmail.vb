@@ -3,15 +3,10 @@ Imports System.Net.Mail
 Imports Google.Apis.Gmail.v1
 Imports Google.Apis.Gmail.v1.Data
 Imports Google.Apis.Auth.OAuth2
-Imports Google.Apis.Services
 Imports Google.Apis.Util.Store
 Imports System.Text
-Imports System.Linq
-Imports System.Collections.Generic
-Imports AE.Net.Mail
 Imports System.Threading
 Imports CommandLine
-Imports CommandLine.Text
 Imports Newtonsoft.Json
 Class Options
     <[Option]("s"c, "subject", Required:=False, DefaultValue:="", HelpText:="Subject of message")>
@@ -19,9 +14,6 @@ Class Options
 
     <[Option]("f"c, "from", Required:=True, HelpText:="Sender address")>
     Public Property Sender As String
-
-    <[Option]("r"c, "reply-to", Required:=False, HelpText:="Reply to address")>
-    Public Property ReplyTo As String
 
     <[OptionList]("t"c, "to", Required:=True, Separator:=";", HelpText:="Recipient addresses, semicolon separated")>
     Public Property Recipients As IList(Of String)
@@ -57,7 +49,7 @@ Module SendGmail
                 Scopes,
                 "user",
                 CancellationToken.None,
-                New FileDataStore(credPath, True)).Result
+                New Google.Apis.Util.Store.FileDataStore(credPath, True)).Result
                 End Using
                 Dim BodyText As String = ""
                 If Not String.IsNullOrEmpty(o.BodyFile) Then
@@ -69,42 +61,44 @@ Module SendGmail
                 Else
                     BodyText = o.Message
                 End If
-                Dim msg = New AE.Net.Mail.MailMessage() _
+                Dim msg = New System.Net.Mail.MailMessage() _
                 With {
                 .Subject = o.Subject,
                 .Body = BodyText,
                 .From = New MailAddress(o.Sender)
                 }
                 For Each recipient In o.Recipients
-                        msg.To.Add(New MailAddress(recipient))
-                    Next
-                    If Not String.IsNullOrEmpty(o.ReplyTo) Then
-                        msg.ReplyTo.Add(New MailAddress(o.ReplyTo))
-                    Else
-                        msg.ReplyTo.Add(New MailAddress(o.Sender))
+                    msg.To.Add(New MailAddress(recipient))
+                Next
+                Dim ApplicationName As String = ""
+                Dim jsonreader = New JsonTextReader(New StreamReader("client_id.json"))
+                While jsonreader.Read()
+                    If jsonreader.TokenType = JsonToken.PropertyName And jsonreader.Value = "project_id" Then
+                        jsonreader.Read()
+                        ApplicationName = jsonreader.Value
+                        Exit While
                     End If
-                    Dim ApplicationName As String = ""
-                    Dim jsonreader = New JsonTextReader(New StreamReader("client_id.json"))
-                    While jsonreader.Read()
-                        If jsonreader.TokenType = JsonToken.PropertyName And jsonreader.Value = "project_id" Then
-                            jsonreader.Read()
-                            ApplicationName = jsonreader.Value
-                            Exit While
-                        End If
-                    End While
-                    Dim gmail As New GmailService(New Google.Apis.Services.BaseClientService.Initializer() _
+                End While
+                Dim gmail As New GmailService(New Google.Apis.Services.BaseClientService.Initializer() _
                 With {
                 .HttpClientInitializer = credential,
                 .ApplicationName = ApplicationName
                 })
-                    Dim AlarmTriggered As Boolean = False
+                Dim AlarmTriggered As Boolean = False
 
-                    Try
-                        Dim msgStr As New StringWriter()
-                        msg.Save(msgStr)
-                        Dim result = gmail.Users.Messages.Send(New Message With {.Raw = Base64UrlEncode(msgStr.ToString())}, "me").Execute()
-                    Catch e As Exception
-                        Console.WriteLine(e.Message & vbNewLine & e.StackTrace & vbNewLine & e.Data.ToString)
+                Try
+                    Dim msgStr = New Stream
+                    Dim client As SmtpClient = New SmtpClient("localhost")
+                    client.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory
+                    client.PickupDirectoryLocation = "."
+                    client.Send(msg)
+                    Dim filepath = Directory.GetFiles(".", "*.eml", SearchOption.TopDirectoryOnly).Single()
+                    Using fs As New FileStream(filepath, FileMode.Open)
+                        fs.CopyTo(msgstr)
+                    End Using
+                    Dim result = gmail.Users.Messages.Send(New Message With {.Raw = Base64UrlEncode(msgStr.ToString())}, "me").Execute()
+                Catch e As Exception
+                    Console.WriteLine(e.Message & vbNewLine & e.StackTrace & vbNewLine & e.Data.ToString)
                     End Try
                 Else
                     Console.Error.WriteLine("ERROR: client_id.json file missing")
