@@ -10,9 +10,7 @@ Imports System.Runtime.InteropServices
 
 <Assembly: AssemblyTitle("SendGmail")>
 <Assembly: AssemblyDescription("")>
-<Assembly: AssemblyCompany("Vulcan Materials Company")>
 <Assembly: AssemblyProduct("SendGmail")>
-<Assembly: AssemblyCopyright("Copyright © Vulcan Materials Company 2016")>
 <Assembly: AssemblyTrademark("")>
 
 <Assembly: ComVisible(False)>
